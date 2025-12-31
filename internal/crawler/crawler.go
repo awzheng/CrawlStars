@@ -44,8 +44,8 @@ func New(db *database.DB) *Crawler {
 // workers: how many minions to spawn.
 func (c *Crawler) Start(seedUrl string, workers int) {
 	c.startTime = time.Now()
-	fmt.Println("🚀 Liftoff! Starting crawl at:", seedUrl)
-	fmt.Printf("⚙️  Workers: %d | Max Crawls: %d\n\n", workers, c.maxCrawls)
+	fmt.Println("Liftoff! Starting crawl at:", seedUrl)
+	fmt.Printf("Workers: %d | Max Crawls: %d\n\n", workers, c.maxCrawls)
 
 	// Feed the beast.
 	c.Queue <- seedUrl
@@ -249,17 +249,23 @@ func (c *Crawler) process(u string) (content string, title string, links []strin
 				continue
 			}
 
-			// Extract title text
+			// Extract title text from <title> tag
 			if inTitle && titleText == "" {
 				titleText = text
 			}
 
 			// Extract body content (first 500 characters only)
 			if inBody && charCount < 500 {
+				// Filter out very short fragments (likely navigation/menu items)
+				// Only accept text that's at least 10 characters to avoid noise
+				if len(text) < 10 {
+					continue
+				}
+
 				remaining := 500 - charCount
 				if len(text) > remaining {
 					contentBuilder.WriteString(text[:remaining])
-					charCount = 500 // We're done
+					charCount = 500 // We're done collecting content
 				} else {
 					contentBuilder.WriteString(text + " ")
 					charCount += len(text) + 1
@@ -285,16 +291,16 @@ func (c *Crawler) printStats() {
 	duration := time.Since(c.startTime)
 
 	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("🎉 CRAWL COMPLETE! Here's what went down:")
+	fmt.Println("CRAWL COMPLETE! Here's what went down:")
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Printf("⏱️  Duration:          %s\n", duration.Round(time.Second))
-	fmt.Printf("🔢 Total Attempted:   %d pages\n", c.crawledCount.Load())
-	fmt.Printf("💾 Successfully Saved: %d pages\n", c.savedCount.Load())
-	fmt.Printf("❌ Failed:            %d pages\n", c.failedCount.Load())
+	fmt.Printf("Duration:          %s\n", duration.Round(time.Second))
+	fmt.Printf("Total Attempted:   %d pages\n", c.crawledCount.Load())
+	fmt.Printf("Successfully Saved: %d pages\n", c.savedCount.Load())
+	fmt.Printf("Failed:            %d pages\n", c.failedCount.Load())
 
 	if duration.Seconds() > 0 {
 		rate := float64(c.savedCount.Load()) / duration.Seconds()
-		fmt.Printf("🚀 Crawl Speed:       %.2f pages/second\n", rate)
+		fmt.Printf("Crawl Speed:       %.2f pages/second\n", rate)
 	}
 
 	fmt.Println(strings.Repeat("=", 60))

@@ -4,8 +4,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CrawlStars Search 🌟</title>
+    <title>CrawlStars Search</title>
+
+    <!-- Google Fonts: Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
     <style>
+        /* ============================================
+           THEME VARIABLES
+           Customize colors and spacing here
+           ============================================ */
+        :root {
+            /* Solarized Light color palette - clean and professional */
+            --bg-primary: #fdf6e3;
+            /* Warm beige background */
+            --bg-secondary: #eee8d5;
+            /* Slightly darker beige for cards */
+            --bg-info: #ffffff;
+            /* Pure white for info banner */
+
+            --text-primary: #073642;
+            /* Dark blue-gray for main text */
+            --text-secondary: #586e75;
+            /* Medium gray for secondary text */
+            --text-muted: #93a1a1;
+            /* Light gray for hints */
+
+            --accent-primary: #268bd2;
+            /* Bright blue for accents */
+            --accent-hover: #2aa198;
+            /* Teal for hover states */
+            --accent-success: #859900;
+            /* Green for URLs */
+
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+
+            --spacing-xs: 8px;
+            --spacing-sm: 12px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+
+        /* ============================================
+           GLOBAL STYLES
+           ============================================ */
         * {
             margin: 0;
             padding: 0;
@@ -13,160 +64,242 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
             min-height: 100vh;
-            padding: 20px;
+            padding: var(--spacing-lg);
         }
 
+        /* ============================================
+           LAYOUT
+           ============================================ */
         .container {
             max-width: 900px;
             margin: 0 auto;
         }
 
+        /* ============================================
+           INFO BANNER
+           Shows current configuration
+           ============================================ */
         .info-banner {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 10px;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            background: var(--bg-info);
+            border: 1px solid var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md) var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--shadow-sm);
             font-size: 0.9rem;
-            color: #555;
+            color: var(--text-secondary);
         }
 
         .info-banner strong {
-            color: #667eea;
+            color: var(--accent-primary);
+            font-weight: 500;
         }
 
         .info-item {
-            margin: 5px 0;
+            margin: var(--spacing-xs) 0;
         }
 
+        /* ============================================
+           HEADER
+           ============================================ */
         .header {
             text-align: center;
-            color: white;
-            margin-bottom: 40px;
-            padding-top: 20px;
+            margin-bottom: var(--spacing-xl);
+            padding-top: var(--spacing-lg);
         }
 
         .header h1 {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+            letter-spacing: -0.5px;
+        }
+
+        .header h1 .star {
+            color: #ffa500;
         }
 
         .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
         }
 
+        /* ============================================
+           SEARCH BOX
+           ============================================ */
         .search-box {
             background: white;
-            border-radius: 50px;
-            padding: 10px 20px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            border: 2px solid var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-sm);
+            box-shadow: var(--shadow-md);
             display: flex;
             align-items: center;
-            margin-bottom: 30px;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-xl);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-lg);
         }
 
         #searchInput {
             flex: 1;
             border: none;
             outline: none;
-            font-size: 1.2rem;
-            padding: 10px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-primary);
+            background: transparent;
+        }
+
+        #searchInput::placeholder {
+            color: var(--text-muted);
         }
 
         #searchBtn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent-primary);
             color: white;
             border: none;
-            padding: 12px 30px;
-            border-radius: 30px;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-sm);
             font-size: 1rem;
-            font-weight: bold;
+            font-weight: 500;
+            font-family: inherit;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: background 0.2s ease, transform 0.1s ease;
         }
 
         #searchBtn:hover {
-            transform: scale(1.05);
+            background: var(--accent-hover);
         }
 
         #searchBtn:active {
-            transform: scale(0.95);
+            transform: scale(0.98);
         }
 
+        /* ============================================
+           RESULTS CONTAINER
+           ============================================ */
         .results {
-            margin-top: 30px;
+            margin-top: var(--spacing-lg);
         }
 
+        /* ============================================
+           RESULT CARDS
+           Individual search result styling
+           ============================================ */
         .result-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+            background: var(--bg-secondary);
+            border: 1px solid #d9d2c0;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
 
         .result-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent-primary);
         }
 
         .result-title {
-            font-size: 1.5rem;
-            color: #667eea;
-            margin-bottom: 10px;
-            font-weight: bold;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: var(--accent-primary);
+            margin-bottom: var(--spacing-sm);
+            line-height: 1.3;
         }
 
+        /* Make URLs clickable */
         .result-url {
-            color: #28a745;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
+            color: var(--accent-success);
+            font-size: 0.85rem;
+            margin-bottom: var(--spacing-sm);
             word-break: break-all;
+            font-family: 'Courier New', monospace;
+            text-decoration: none;
+            display: inline-block;
+            transition: color 0.2s ease;
+        }
+
+        .result-url:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
         }
 
         .result-snippet {
-            color: #555;
+            color: var(--text-secondary);
             line-height: 1.6;
-            margin-bottom: 10px;
+            margin-bottom: var(--spacing-md);
         }
 
         .stars {
-            font-size: 1.5rem;
-            color: #ffd700;
-            margin-top: 10px;
+            font-size: 1.2rem;
+            color: #ffa500;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
         }
 
+        .stars .score {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* ============================================
+           LOADING STATE
+           ============================================ */
         .loading {
             text-align: center;
-            color: white;
-            font-size: 1.5rem;
-            margin-top: 50px;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            margin-top: 3rem;
+            font-weight: 300;
         }
 
+        /* ============================================
+           NO RESULTS STATE
+           ============================================ */
         .no-results {
             text-align: center;
-            color: white;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 40px;
-            border-radius: 15px;
-            font-size: 1.3rem;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            border: 2px dashed var(--text-muted);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-md);
+            font-size: 1.1rem;
         }
 
+        /* ============================================
+           ERROR STATE
+           ============================================ */
         .error {
-            background: #ff6b6b;
+            background: #dc322f;
             color: white;
-            padding: 20px;
-            border-radius: 15px;
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
             text-align: center;
-            margin-top: 20px;
+            margin-top: var(--spacing-lg);
+            box-shadow: var(--shadow-md);
         }
 
+        /* ============================================
+           ANIMATIONS
+           ============================================ */
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -180,55 +313,96 @@
         }
 
         .result-card {
-            animation: fadeIn 0.5s ease-out;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        /* ============================================
+           RESPONSIVE DESIGN
+           ============================================ */
+        @media (max-width: 768px) {
+            body {
+                padding: var(--spacing-md);
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            #searchInput {
+                font-size: 1rem;
+            }
+
+            .result-card {
+                padding: var(--spacing-md);
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="container">
+        <!-- Info banner showing current configuration -->
         <div id="infoBanner" class="info-banner" style="display: none;">
             <div class="info-item">
-                <strong>📍 Configured Seed URL:</strong> <span id="seedUrl">Loading...</span>
+                <strong>Configured Seed URL:</strong> <span id="seedUrl">Loading...</span>
             </div>
-            <div class="info-item" style="font-size: 0.85rem; color: #777; margin-top: 5px;">
-                💡 Note: Search shows ALL pages in the database from all crawl sessions
+            <div class="info-item" style="font-size: 0.85rem; color: var(--text-muted); margin-top: var(--spacing-xs);">
+                Note: Search shows ALL pages in the database from all crawl sessions
             </div>
         </div>
 
+        <!-- Header section -->
         <div class="header">
-            <h1>🌟 CrawlStars Search</h1>
+            <h1><span class="star">🌟</span> CrawlStars Search</h1>
             <p>Explore the web archive with star-rated relevance</p>
         </div>
 
+        <!-- Search input box -->
         <div class="search-box">
             <input type="text" id="searchInput" placeholder="Search for anything..." autocomplete="off" />
             <button id="searchBtn">Search</button>
         </div>
 
+        <!-- Results will be displayed here -->
         <div id="resultsContainer"></div>
     </div>
 
     <script>
+        // ============================================
+        // DOM ELEMENTS
+        // Get references to our important HTML elements
+        // ============================================
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const resultsContainer = document.getElementById('resultsContainer');
         const infoBanner = document.getElementById('infoBanner');
         const seedUrlElement = document.getElementById('seedUrl');
 
-        // Load info on page load
+        // ============================================
+        // INITIALIZATION
+        // Load configuration info when page loads
+        // ============================================
         loadInfo();
+
+        // ============================================
+        // EVENT LISTENERS
+        // Wire up user interactions
+        // ============================================
 
         // Search on button click
         searchBtn.addEventListener('click', performSearch);
 
-        // Search on Enter key
+        // Search on Enter key press (convenience feature)
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performSearch();
             }
         });
 
+        // ============================================
+        // LOAD CONFIGURATION INFO
+        // Fetches and displays current seed URL from server
+        // ============================================
         async function loadInfo() {
             try {
                 const response = await fetch('http://localhost:8080/info');
@@ -238,21 +412,28 @@
                 infoBanner.style.display = 'block';
             } catch (error) {
                 console.error('Failed to load info:', error);
+                // Don't show banner if info can't be loaded (server probably not running yet)
             }
         }
 
+        // ============================================
+        // PERFORM SEARCH
+        // Main search function that queries the backend API
+        // ============================================
         async function performSearch() {
             const query = searchInput.value.trim();
 
+            // Validate input (don't search for empty strings)
             if (!query) {
                 resultsContainer.innerHTML = '<div class="error">Please enter a search query!</div>';
                 return;
             }
 
-            // Show loading
+            // Show loading state while we wait for the server
             resultsContainer.innerHTML = '<div class="loading">🔍 Searching the cosmos...</div>';
 
             try {
+                // Call the search API endpoint
                 const response = await fetch(`http://localhost:8080/search?q=${encodeURIComponent(query)}`);
 
                 if (!response.ok) {
@@ -262,6 +443,7 @@
                 const results = await response.json();
                 displayResults(results, query);
             } catch (error) {
+                // Show error message if something goes wrong
                 resultsContainer.innerHTML = `
                     <div class="error">
                         <strong>Oops! Something went wrong.</strong><br>
@@ -272,23 +454,29 @@
             }
         }
 
+        // ============================================
+        // DISPLAY SEARCH RESULTS
+        // Renders the results as nice-looking HTML cards
+        // ============================================
         function displayResults(results, query) {
+            // Handle no results case
             if (!results || results.length === 0) {
                 resultsContainer.innerHTML = `
                     <div class="no-results">
-                        😕 No results found for "${query}"<br><br>
+                        No results found for "${escapeHtml(query)}"<br><br>
                         Try a different search term!
                     </div>
                 `;
                 return;
             }
 
+            // Generate HTML for each result card
             const html = results.map((result, index) => {
                 const stars = generateStars(result.stars);
                 return `
-                    <div class="result-card" style="animation-delay: ${index * 0.1}s">
+                    <div class="result-card" style="animation-delay: ${index * 0.08}s">
                         <div class="result-title">${escapeHtml(result.title)}</div>
-                        <div class="result-url">${escapeHtml(result.url)}</div>
+                        <a href="${escapeHtml(result.url)}" target="_blank" class="result-url">${escapeHtml(result.url)}</a>
                         <div class="result-snippet">${escapeHtml(result.snippet)}</div>
                         <div class="stars">${stars}</div>
                     </div>
@@ -298,22 +486,30 @@
             resultsContainer.innerHTML = `<div class="results">${html}</div>`;
         }
 
+        // ============================================
+        // GENERATE STAR RATING DISPLAY
+        // Creates visual star representation (simple version - no half stars)
+        // Stars are now integers (1-5) so we just repeat the emoji
+        // ============================================
         function generateStars(rating) {
-            const fullStars = Math.floor(rating);
-            const hasHalfStar = (rating % 1) >= 0.5;
+            // Full stars based on the rating (which is now an integer 1-5)
+            const fullStars = rating;
+
+            // Filled stars
             let stars = '⭐'.repeat(fullStars);
 
-            if (hasHalfStar && fullStars < 5) {
-                stars += '✨'; // Half star representation
-            }
+            // Empty stars to complete the 5-star display
+            stars += '☆'.repeat(5 - fullStars);
 
-            // Add empty stars
-            const totalStars = hasHalfStar ? fullStars + 1 : fullStars;
-            stars += '☆'.repeat(Math.max(0, 5 - totalStars));
-
-            return `${stars} (${rating.toFixed(2)}/5)`;
+            // Add numeric score for clarity
+            return `${stars} <span class="score">${rating}/5</span>`;
         }
 
+        // ============================================
+        // ESCAPE HTML
+        // Prevents XSS attacks by escaping user input before rendering
+        // This is important! Never trust user input.
+        // ============================================
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;

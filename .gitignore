@@ -37,3 +37,6 @@ Thumbs.db
 # (These should be in environment variables)
 config.json
 credentials.json
+
+# My personal MongoDB connection string
+admin.md

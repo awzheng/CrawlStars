@@ -35,7 +35,7 @@ func main() {
 	// 1. Connect to DB
 	db, err := database.Connect(mongoURI)
 	if err != nil {
-		log.Fatalf("🔥 Failed to connect to DB: %v", err)
+		log.Fatalf("Failed to connect to DB: %v", err)
 	}
 	defer db.Disconnect()
 	log.Println("✅ Database connected.")

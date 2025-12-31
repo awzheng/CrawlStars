@@ -15,15 +15,15 @@ type Page struct {
 	URL     string  `bson:"url"`
 	Title   string  `bson:"title"`
 	Content string  `bson:"content"`
-	Score   float64 `bson:"score,omitempty"` // For search results only.
+	Score   float64 `bson:"score,omitempty"` // MongoDB's search score (for internal use)
 }
 
-// SearchResult wraps the page with a shiny star rating.
+// SearchResult wraps the page with a star rating.
 type SearchResult struct {
-	Title   string  `bson:"title" json:"title"`
-	URL     string  `bson:"url" json:"url"`
-	Stars   float64 `bson:"stars" json:"stars"` // Changed to float as the user asked for a "float" but 1-5 rating usually implies ints. I will keep it float for precision if needed, or cast.
-	Snippet string  `bson:"snippet" json:"snippet"`
+	Title   string `bson:"title" json:"title"`
+	URL     string `bson:"url" json:"url"`
+	Stars   int    `bson:"stars" json:"stars"` // Simple 1-5 integer rating
+	Snippet string `bson:"snippet" json:"snippet"`
 }
 
 // DB holds the keys to the kingdom (MongoDB client).
@@ -148,19 +148,42 @@ func (db *DB) SearchPages(query string) ([]SearchResult, error) {
 		return []SearchResult{}, nil
 	}
 
-	// Normalize scores to 5 stars.
-	// The highest score gets 5 stars. Everyone else is graded on a curve.
-	maxScore := results[0].Score
+	// Convert results to SearchResult with ABSOLUTE star ratings
+	// Instead of normalizing to the top result, we rate each result independently
+	// based on its raw MongoDB relevance score.
+	//
+	// STAR RATING SCALE (based on MongoDB Atlas Search scores):
+	// ============================================================
+	// 5 stars: Score >= 5  (Excellent match - exact keyword matches, boosted fields)
+	// 4 stars: Score >= 4   (Very good match - multiple keyword occurrences)
+	// 3 stars: Score >= 3   (Good match - keyword present but not dominant)
+	// 2 stars: Score >= 2   (Fair match - weak relevance, partial matches)
+	// 1 star:  Score < 2    (Poor match - barely relevant, edge case matches)
+	//
+	// Note: MongoDB Atlas Search scores are unbounded and can go higher than 10.
+	// The scale focuses on practical ranges observed in typical searches.
+	// You can adjust these thresholds based on your dataset and search behavior.
+
 	var starred []SearchResult
 
 	for _, p := range results {
-		// Calculate stars: (score / maxScore) * 5
-		stars := (p.Score / maxScore) * 5
-		if stars < 1 {
+		// Calculate stars based on absolute score thresholds
+		// Simple linear scale: 5, 4, 3, 2, or 1 stars
+		var stars int
+
+		if p.Score >= 5.0 {
+			stars = 5
+		} else if p.Score >= 4.0 {
+			stars = 4
+		} else if p.Score >= 3.0 {
+			stars = 3
+		} else if p.Score >= 2.0 {
+			stars = 2
+		} else {
 			stars = 1
 		}
 
-		// Create a snippet (first 100 chars)
+		// Create a snippet (first 100 chars of content)
 		snippet := p.Content
 		if len(snippet) > 100 {
 			snippet = snippet[:100] + "..."
