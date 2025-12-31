@@ -15,10 +15,10 @@ A concurrent web crawler and search engine built with Go and MongoDB Atlas. Craw
 ## Architecture
 
 ### Write Path (Crawler)
-![CrawlStars Write Path](assets/crawlstars-write-path.png)
+![CrawlStars Write Path](assets/CrawlStars-write-path.png)
 
 ### Read Path (Search)
-![CrawlStars Read Path](assets/crawlstars-read-path.png)
+![CrawlStars Read Path](assets/CrawlStars-read-path.png)
 
 ## Prerequisites
 

@@ -29,10 +29,10 @@ The scaffolding for CrawlStars was initially built using PostgreSQL, but it was 
 ## Project Diagrams
 
 ### Write Path
-![CrawlStars Write Path](assets/crawlstars-write-path.png)
+![CrawlStars Write Path](assets/CrawlStars-write-path.png)
 
 ### Read Path
-![CrawlStars Read Path](assets/crawlstars-read-path.png)
+![CrawlStars Read Path](assets/CrawlStars-read-path.png)
 ### Project Structure
 
 ```
