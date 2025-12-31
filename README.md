@@ -12,6 +12,14 @@ A concurrent web crawler and search engine built with Go and MongoDB Atlas. Craw
 - Rates search results on a 1-5 star scale based on absolute relevance scores
 - Web interface with clean design and clickable result links
 
+## Architecture
+
+### Write Path (Crawler)
+![CrawlStars Write Path](assets/crawlstars-write-path.png)
+
+### Read Path (Search)
+![CrawlStars Read Path](assets/crawlstars-read-path.png)
+
 ## Prerequisites
 
 - Go 1.16 or higher

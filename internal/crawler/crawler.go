@@ -175,7 +175,7 @@ func (c *Crawler) process(u string) (content string, title string, links []strin
 		return "", "", nil, err
 	}
 
-	// Put on our fancy disguise. Without a User-Agent, Wikipedia thinks we're a spam bot.
+	// Put on our fancy disguise. Without a User-Agent, websites think we're a spam bot.
 	req.Header.Set("User-Agent", "CrawlStars/1.0 (+https://github.com/andrewzheng/CrawlStars; Educational Crawler)")
 
 	client := &http.Client{
