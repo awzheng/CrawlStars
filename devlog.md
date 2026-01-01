@@ -103,6 +103,7 @@ Okay, so now that we've established what kind of project we're making (and I'm n
 
 Now that we've laid out the project structure, it's time to make these parts move.
 I'll be breaking down the logic and decisions behind the code.
+Get ready for 300 lines of enlightenment.
 
 ## internal/crawler/crawler.go
 
@@ -136,12 +137,14 @@ A few notable features of the struct:
 
 > Andrew! What's atomic.Int64?
 
-[difference between atomic and non atomic goes here]
+Atomic types ensure thread safety by using atomic operations: indivisible and can't be interrupted by other threads. It uses low-level CPU instructions to update the values instantly. Seemed very appropriate for our crawler purposes!
 
 ### Constructor
 
 Here's the constructor for `crawler.go`. 
-The constructor is called when we create a new object (i.e. spawn in a concurrent crawler minion) from our crawler struct.
+The constructor is called to create a Crawler instance. Then, the workers are spawned in `Start()`. In simple terms:
+- `New()` = build the factory
+- `Start()` = spawn the minions
 
 ```go
 // New constructor for a new Crawler.
@@ -202,7 +205,7 @@ Here's what happens step by step:
 2. **Push seed URL**: SEED_URL is the first URL we crawl. It gets added to the `Queue` channel.
 3. **Spawn workers**: In the for loop, we create `workers` number of goroutines (default 10), each running the `worker()` function concurrently.
 4. **Background processor**: A separate goroutine (not a minion!) runs `processResults()` to save pages to the database.
-5. **Wait for completion**: Once we hit our target (default 1000), `wg.Wait()` blocks until all workers are done.
+5. **Wait for completion**: Once our workers finish (either by reaching 1000 or running out of URLs), `wg.Wait()` unblocks.
 6. **Clean up**: Close both channels and print final statistics. At this point we're ready to run the search engine and see what we've crawled.
 
 > "Andrew! Why do we need a separate `processResults()` goroutine? Can't workers just save to the database directly?"
@@ -210,7 +213,8 @@ Here's what happens step by step:
 This is a design pattern I learned called **producer-consumer**. 
 
 - Picture this: if each worker saved directly to MongoDB, we'd have 10 concurrent database connections fighting for resources. 
-- Instead, workers produce pages to the `Results` channel, and one consumer goroutine processes them sequentially. Another "go minion", this time not a crawler.
+- Instead, workers produce pages to the `Results` channel, and the consumer goroutine processes them sequentially. 
+- This way, the crawling speed is seperate from the saving speed. Even if Mongo gets slow, it won't stop our workers from crawling.
 - So we have a producer worker (crawler) and a consumer worker (processor).
 - This makes me feel like an alpha leader and also keeps my bank account sane. 
 - No need to thank me! Banks hire me pls
@@ -291,7 +295,7 @@ func (c *Crawler) worker(id int) {
 ```
 
 Our worker is a never-ending loop (empty `for` loop) that consumes URLs from the queue and processes them.
-Once the URL is processed, it spits it back to the queue for processing and repeats the process.
+Once the URL is processed, the worker spits the extracted links from that URL back to the queue for processing and repeats the process for those links. The original (now processed) URL gets sent to the `Results` channel for database storage.
 
 This is where the purple mini-loop **Write Path** diagram occurs. If we follow the flow of a URL through the system here's what we get:
 
@@ -305,8 +309,9 @@ This is where the purple mini-loop **Write Path** diagram occurs. If we follow t
 > "Andrew! What happens if the queue is full?"
 
 The `select` statement with `default` is a non-blocking send, so it won't wait around for the queue to become available before moving on. 
-If the queue is full (1000 URLs buffered), we skip that link instead (and just move on) instead of waiting. 
-This prevents our concurrent workers from getting stuck when the queue is saturated.
+If the queue is full (1000 URLs buffered), we skip that link instead.
+Otherwise, the worker would block and wait for a slot to open, ruining our concurrency.
+Thus, the main tradeoff we're making here is favouring throughput over completeness.
 After all, we have 10 workers and they got work to do!
 - Like some random guy in the Waterloo plaza once said: you can't change the girl, you gotta change the girl.
 - don't worry that one took me a while too.
@@ -442,7 +447,7 @@ Here's a quick summary.
    - First 500 characters from `<body>` (filtering out fragments < 10 chars to avoid navigation noise)
    - All `<a>` tag links for the feedback loop
 
-...and it can be simplified into the clean nodes `Fetch HTML → Parse `<body>` → Extract Links`. that you see in the diagram. Impressive huh?
+...and it can be simplified into the clean nodes `Fetch HTML → Parse <body> → Extract Links` that you see in the diagram. Impressive huh?
 
 
 
