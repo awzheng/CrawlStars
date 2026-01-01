@@ -23,12 +23,13 @@ nah.
 - Go is compiled. It's faster and more efficient than Python. However, the dopamine loss compared to my days of seeing my frontend update immediately when coding in Python/JS was a culture shock. lol.
 - Goroutines let me spawn multiple **concurrent** workers to crawl pages at the same time. Having 10 workers makes me feel like a 10x developer while only using 10% of my CPU and several MBs of storage up in MongoDB Atlas (more on that later).
 - Being statically typed means it is less prone to errors. Yes it's important since during testing, lots of websites (such as Reddit) tend to block crawlers and cause 403 errors.
+- Python isn't the name of the breakout hit from CORTIS, the most notable new kpop boy band of the decade thus far.
 
 ### Why MongoDB Atlas over SQL?
 
-The scaffolding for CrawlStars was initially built using PostgreSQL, but it was too rigid and error-prone for my purposes. Instead I pivoted to MongoDB Atlas, a NoSQL database. But why?
+The scaffolding for CrawlStars was initially built using PostgreSQL, but it was too rigid and error-prone for my purposes. Instead I pivoted to MongoDB Atlas, a NoSQL database. Here's why:
 
-1. JSON is flexible, and my crawler extracts data that looks like json anyway, thus storing it in a NoSQL database is a natural fit.
+1. JSON is flexible, and my crawler extracts data that looks like json anyway (kids these days!), thus storing it in a NoSQL database is a natural fit.
 2. MongoDB is optimized for high-speed ingestion which is advantageous for CrawlStars which uses 10 concurrent workers to dump data fast.
 3. Atlas Search is OP. A fuzzy search engine with relevance ratings that I can scale into a rating of 0-5 stars? Built into the database??? Yes please!
 
