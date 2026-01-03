@@ -105,6 +105,8 @@ Now that we've laid out the project structure, it's time to make these parts mov
 I'll be breaking down the logic and decisions behind the code.
 It takes a lot of love and care to ensure that your creation stays on the write path.
 
+![CrawlStars Write Path](assets/CrawlStars-write-path.png)
+
 ## internal/crawler/crawler.go
 
 The flagship of our project, `crawler.go` manages our concurrent workers (crawlers) and our work queue (work queue).
@@ -515,7 +517,7 @@ It's kind of like working in a group project with too many group members. It's l
 After the env variables, we connect to the database and initialize the crawler. 
 As long as there's no error, it'll launch successfully and print a success message to the terminal.
 Then, a crawler is structured and launched.
-Remember, a "crawler" is a "worker pool" (not an individual worker!) that's structured to crawl a website.
+Remember, a "crawler" is a "worker pool" (which spawns multiple worker goroutines) that's structured to crawl a website.
 Finally, we call `Start(seedURL, workerCount)` on the crawler, which launches the worker pool and begins the crawl!
 
 ## internal/database/mongo.go
@@ -536,7 +538,7 @@ As you can see, it's a simple struct with 4 fields: `URL`, `Title`, `Content`, a
 
 ### Connect(): Knocking on Mongo's Door
 
-`Connect()` is the first function in the write path. It takes a `mongoURI` as input and returns a `DB` struct and an error if something went wrong. (Yes, another cool thing about Golang that I didn't know before is having multiple return variable types for member functions!)
+`Connect()` is the first function in the write path. It takes a `mongoURI` as input and returns a `DB` struct and an error if something went wrong. (Yes, another cool thing about Golang that I didn't know before is having multiple return variable types for methods!)
 
 ```go
 // Connect connects to the database. Don't forget to unplug it later!
@@ -595,15 +597,30 @@ func Connect(uri string) (*DB, error) {
 
 	return &DB{client: client, coll: coll}, nil
 }
+
+// Disconnect says goodbye to the database.
+func (db *DB) Disconnect() error {
+	return db.client.Disconnect(context.Background())
+}
 ```
+
+Look at the loading indicator goroutine.
+It's a sneaky producer-consumer pattern!
+The main goroutine is connecting to the database while this goroutine is printing a loading indicator to the terminal.
+Communication is key in all healthy relationships!
 
 > Andrew! What does the underscore `_` mean?
 
 The underscore `_` also known as the blank identifier is a throwaway variable in Go that we don't use. 
 It's a convention in Go to indicate that we don't care about the value returned by a function. 
 In this case, we don't care about the result of `coll.Indexes().CreateOne()`, so we use the blank identifier to indicate that we don't care about it.
+Here, we're discarding the `mongo.UpdateResult` which contains metadata like how many documents were modified. 
+Since we only care if it succeeded (via the error), we can just ignore this result.
 
-As you can see, lots of the code was written for user-friendliness and printing status messages to the terminal. We also use a map data structure to store the URLs of the pages we've already crawled:
+As you can see, lots of the code was written for user-friendliness and printing status messages to the terminal. 
+Disconnect is also important to disconnect from the database, clean up resources, and save my bank account.
+
+We also use a MongoDB index (kinda like a map) to prevent duplicate saves:
 
 ```go
 // Ensure the URL is unique. duplicated content is so last season.
@@ -630,7 +647,14 @@ func (db *DB) InsertPage(page Page) error {
 }
 ```
 
-As you can see here, the blank identifier `_` is another throwaway variable that we don't use.
+> Andrew! Why are we using UpdateOne() instead of InsertOne()?
+
+We use `UpdateOne()` with the `Upsert` option set to `true` to insert the page if it doesn't exist, or update it if it does. 
+This is standard practice in MongoDB for upserting documents.
+If two of our workers were to somehow process the same URL at the same time (race condition), the second one would be upserting the first entry instead of tweaking out.
+Plus, we would be updating the first entry in case there's somehow an improvement in the page.
+
+As you can see here, the blank identifier `_` is another throwaway variable that we don't use in case `InsertPage()` returns an error.
 
 ### Completing the Write Path
 
@@ -638,4 +662,13 @@ Now, we're experts in every aspect of the write path!
 I hope you feel as satisfied as I did when I looked back on the write path diagram and realized that I had finally completed and understood every node of it.
 That's how I knew that I was on the write path.
 
+# Episode 3: Read-y, Go!
+
+Ok I admit this episode title is a bit of a stretch.
+Let's forget about that and instead focus on this extremely aesthetic read path diagram!
+
+![CrawlStars Read Path](assets/CrawlStars-read-path.png)
+
+It's about as intuitive as it gets: the user interacts with the frontend `index.html` which tells the backend `main.go` and `mongo.go` to search for a query using MongoDB Atla's search functionality. 
+The backend then calculates the star rating based on relevance and returns the results to the frontend which displays them to the user.
 
