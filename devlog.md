@@ -35,9 +35,9 @@ nah.
 The scaffolding for CrawlStars was initially built using PostgreSQL, but it was too rigid and error-prone for my purposes. 
 Instead I pivoted to MongoDB Atlas, a NoSQL database. Here's why:
 
-1. JSON is flexible, and my crawler extracts data that looks like json anyway (kids these days!), thus storing it in a NoSQL database is a natural fit.
-2. MongoDB is optimized for high-speed ingestion which is advantageous for CrawlStars which uses 10 concurrent workers to dump data fast.
-3. Atlas Search is OP. A fuzzy search engine with relevance ratings that I can scale into a rating of 0-5 stars? Built into the database??? Yes please!
+- JSON is flexible, and my crawler extracts data that looks like json anyway (kids these days!), thus storing it in a NoSQL database is a natural fit.
+- MongoDB is optimized for high-speed ingestion which is advantageous for CrawlStars which uses 10 concurrent workers to dump data fast.
+- Atlas Search is OP. A fuzzy search engine with relevance ratings that I can scale into a rating of 0-5 stars? Built into the database??? Yes please!
 
 ## Project Diagrams
 
@@ -99,11 +99,11 @@ Here are some brief descriptions of the project structure in table format:
 
 Okay, so now that we've established what kind of project we're making (and I'm not a complete bum), let's start building!
 
-# Episode 2: The Crawlers
+# Episode 2: The Write Path
 
 Now that we've laid out the project structure, it's time to make these parts move.
 I'll be breaking down the logic and decisions behind the code.
-Get ready for 300 lines of enlightenment.
+It takes a lot of love and care to ensure that your creation stays on the write path.
 
 ## internal/crawler/crawler.go
 
@@ -449,6 +449,193 @@ Here's a quick summary.
 
 ...and it can be simplified into the clean nodes `Fetch HTML → Parse <body> → Extract Links` that you see in the diagram. Impressive huh?
 
+## cmd/crawler/main.go
 
+cmd/crawler/main.go is the orchestrator that ties everything together.
+
+```go
+func main() {
+	// Configuration (Environment Variables or Defaults)
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
+	seedURL := os.Getenv("SEED_URL")
+	if seedURL == "" {
+		seedURL = "https://en.wikipedia.org/wiki/Computer_science" // As requested!
+	}
+
+	workerCountStr := os.Getenv("WORKERS")
+	workerCount, err := strconv.Atoi(workerCountStr)
+	if err != nil || workerCount == 0 {
+		workerCount = 10
+	}
+
+	log.Println("🌟 CrawlStars is initializing...")
+	log.Printf("Target Database: %s", mongoURI)
+	log.Printf("Seed URL: %s", seedURL)
+	log.Printf("Worker Count: %d", workerCount)
+
+	// 1. Connect to DB
+	db, err := database.Connect(mongoURI)
+	if err != nil {
+		log.Fatalf("Failed to connect to DB: %v", err)
+	}
+	defer db.Disconnect()
+	log.Println("✅ Database connected.")
+
+	// 2. Initialize Crawler
+	c := crawler.New(db)
+
+	// 3. Launch!
+	c.Start(seedURL, workerCount)
+}
+```
+
+
+### Environment Configuration
+
+The first thing you'll notice is the environment variables.
+These are based on user input for mongoURI, seedURL, and workerCount.
+- mongoURI: The MongoDB connection string. Defaults to "mongodb://localhost:27017" if not specified.
+- seedURL: The URL to start crawling from. Defaults to "https://en.wikipedia.org/wiki/Computer_science" if not specified.
+- workerCount: The number of workers to use. Defaults to 10 if not specified.
+
+> Andrew! Why does workerCount default to 10? Wouldn't it be faster to use more workers?
+
+Nope, and believe me, I tried. This is because concurrent programming has diminishing returns, and at some point, the overhead of managing more workers outweighs the benefits of parallelism.
+For example, when I ran it with 100 workers, it was actually slower than 10 workers.
+The queue wouldn't fill up fast enough to require more than 10+ workers anyway, so a lot of the workers were idling and taking up precious system resources.
+It's kind of like working in a group project with too many group members. It's less efficient per person overall.
+10 workers proved to be the sweet spot for CrawlStars.
+
+### The Launch Sequence
+
+After the env variables, we connect to the database and initialize the crawler. 
+As long as there's no error, it'll launch successfully and print a success message to the terminal.
+Then, a crawler is structured and launched.
+Remember, a "crawler" is a "worker pool" (not an individual worker!) that's structured to crawl a website.
+Finally, we call `Start(seedURL, workerCount)` on the crawler, which launches the worker pool and begins the crawl!
+
+## internal/database/mongo.go
+
+This is our final stop in the write path before our pages ascend to the MongoDB Atlas heavens! For the write path, there are 2 main functions: `Connect()` and `InsertPage()`. Let's first look at the `Page` struct which is used to represent a webpage in our database.
+
+```go
+// Page holds the data for a crawled webpage.
+type Page struct {
+	URL     string  `bson:"url"`
+	Title   string  `bson:"title"`
+	Content string  `bson:"content"`
+	Score   float64 `bson:"score,omitempty"` // MongoDB's search score (for internal use)
+}
+```
+
+As you can see, it's a simple struct with 4 fields: `URL`, `Title`, `Content`, and `Score`. The `Score` field is used for MongoDB's search score (for internal use).
+
+### Connect(): Knocking on Mongo's Door
+
+`Connect()` is the first function in the write path. It takes a `mongoURI` as input and returns a `DB` struct and an error if something went wrong. (Yes, another cool thing about Golang that I didn't know before is having multiple return variable types for member functions!)
+
+```go
+// Connect connects to the database. Don't forget to unplug it later!
+func Connect(uri string) (*DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Show a nice loading indicator with elapsed time
+	done := make(chan bool)
+	go func() {
+		start := time.Now()
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		fmt.Print("⏳ Connecting to database")
+		for {
+			select {
+			case <-done:
+				fmt.Print("\r\033[K") // Clear the line
+				return
+			case <-ticker.C:
+				elapsed := time.Since(start).Seconds()
+				// \r returns to start of line, \033[K clears to end of line
+				fmt.Printf("\r⏳ Connecting to database... (%0.1fs elapsed)", elapsed)
+			}
+		}
+	}()
+
+	// Knock knock. Who's there? Mongo.
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		close(done)
+		time.Sleep(50 * time.Millisecond) // Let the goroutine clean up
+		return nil, fmt.Errorf("failed to knock on Mongo's door: %w", err)
+	}
+
+	// Ping it just to be sure it's awake.
+	if err := client.Ping(ctx, nil); err != nil {
+		close(done)
+		time.Sleep(50 * time.Millisecond)
+		return nil, fmt.Errorf("mongo is sleeping (ping failed): %w\n💡 Tip: Make sure MONGO_URI is set to your Atlas connection string!", err)
+	}
+
+	// Stop the loading indicator
+	close(done)
+	time.Sleep(50 * time.Millisecond) // Let the goroutine clean up
+
+	// We're in! Prepare the collection.
+	coll := client.Database("crawlstars").Collection("webpages")
+
+	// Ensure the URL is unique. duplicated content is so last season.
+	_, _ = coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "url", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+
+	return &DB{client: client, coll: coll}, nil
+}
+```
+
+> Andrew! What does the underscore `_` mean?
+
+The underscore `_` also known as the blank identifier is a throwaway variable in Go that we don't use. 
+It's a convention in Go to indicate that we don't care about the value returned by a function. 
+In this case, we don't care about the result of `coll.Indexes().CreateOne()`, so we use the blank identifier to indicate that we don't care about it.
+
+As you can see, lots of the code was written for user-friendliness and printing status messages to the terminal. We also use a map data structure to store the URLs of the pages we've already crawled:
+
+```go
+// Ensure the URL is unique. duplicated content is so last season.
+	_, _ = coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "url", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+```
+
+### InsertPage(): Safe Keeping
+
+`InsertPage()` is the final function in the write path. It takes a `Page` struct as input and inserts it into the database. It also returns an error if something went wrong.
+
+```go
+// InsertPage tucks a webpage into the database for safe keeping.
+// If it already exists, we give it a makeover (update).
+func (db *DB) InsertPage(page Page) error {
+	opts := options.Update().SetUpsert(true)
+	filter := bson.M{"url": page.URL}
+	update := bson.M{"$set": page}
+
+	_, err := db.coll.UpdateOne(context.Background(), filter, update, opts)
+	return err
+}
+```
+
+As you can see here, the blank identifier `_` is another throwaway variable that we don't use.
+
+### Completing the Write Path
+
+Now, we're experts in every aspect of the write path! 
+I hope you feel as satisfied as I did when I looked back on the write path diagram and realized that I had finally completed and understood every node of it.
+That's how I knew that I was on the write path.
 
 
