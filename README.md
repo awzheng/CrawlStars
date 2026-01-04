@@ -2,7 +2,7 @@
 
 A concurrent web crawler and search engine built with Go and MongoDB Atlas during my 1A/1B winter break. This project explores SEO fundamentals, concurrent programming patterns, and full-text search implementation.
 
-## Read the DevLog
+## ‼️ Read the DevLog ‼️
 
 I documented the entire development process, technical decisions, and reasoning behind every design choice in the devlog. It covers the Write Path (crawler architecture), Read Path (search system), and all the lessons learned along the way.
 
