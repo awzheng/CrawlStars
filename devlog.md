@@ -665,6 +665,8 @@ That's how I knew that I was on the write path.
 # Episode 3: Read-y, Go!
 
 Ok I admit this episode title is a bit of a stretch.
+Cut me some slack!
+"Write" and "Read" are oddly phonetically similar.
 Let's forget about that and instead focus on this extremely aesthetic read path diagram!
 
 ![CrawlStars Read Path](assets/CrawlStars-read-path.png)
@@ -733,10 +735,11 @@ func main() {
 Aha! Finally a `main()` function! 
 Was it worth the wait?
 Let's walk through it from top to bottom.
-First we get the MongoDB URI and port from environment variables so that we can run it at port 8080 as a default.
-Then we let the user know that we're connecting to the database.
-If we've connected successfully, we can call in our frontend HTML and set up our HTTP handlers `http.HandleFunc()` for the /search and /info endpoints.
-We can finally start the server and give the user a link straight to the server.
+- First we get the MongoDB URI and port from environment variables so that we can run it at port 8080 as a default.
+- Then we let the user know that we're connecting to the database.
+    - Notice the password redaction logic! In case we share screenshots or log files of the server running, we don't want to show the password.
+- If we've connected successfully, we can call in our frontend HTML and set up our HTTP handlers `http.HandleFunc()` for the /search and /info endpoints.
+- We can finally start the server and give the user a link straight to the server.
 
 > Andrew! Where did HandleFunc() come from?
 
@@ -745,7 +748,7 @@ HTTP handlers are functions that take a `http.ResponseWriter` and a `*http.Reque
 Then, the handler function can use the `http.ResponseWriter` to write a response back to the client and the `*http.Request` to access the request data.
 In this case, we're using it to register the `homeHandler`, `searchHandler`, and `infoHandler` functions (that we gotta write ourselves!) for the root URL pattern "/".
 
-> Andrew! Why do we need two endpoints?
+> Andrew! Why do we need both the `/search` and `/info` endpoints?
 
 Both `searchHandler()` and `infoHandler()` are HTTP handlers in the read path, but they serve different purposes.
 - `searchHandler()`is for the frontend to handle the actual search queries. For example, if we type `computer science` into the search bar, it calls GET `/search?q=computer+science` and returns a JSON array of the search results.
@@ -753,9 +756,36 @@ Both `searchHandler()` and `infoHandler()` are HTTP handlers in the read path, b
 - It's an important REST API design principle for each endpoint to have a single responsibility.
 - i.e. caching: the frontend can cache `/info` for this crawler's configuration, but `/search` changes every time we type in a query.
 
-Let's investigate `searchHandler()` (the write path) first.
+### corsMiddleware()
 
-### searchHandler(): The Brain of the Operation
+```go
+// corsMiddleware adds CORS headers so the frontend can call the API
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
+	}
+}
+```
+
+> Andrew! What's middleware!?
+
+Middleware lets our API to be called from `index.html` served from the same origin.
+What does "the same origin" mean, you ask?
+Well, let's say we have a website at `https://crawlstars.com`.
+If we wanted to call the `/search` endpoint from `index.html`, we'd need to use the `fetch` API to call the `/search` endpoint. 
+Without the middleware, we would be stopped by the CORS (Cross-Origin Resrouce Sharing) security policy.
+
+### searchHandler()
 
 > Andrew! What happens when I type in a query?
 
@@ -791,11 +821,20 @@ Once finished, the results are returned as JSON and sent back to the frontend.
 > Andrew! Why JSON?
 
 Because it's easy for humans to read and write, and for JavaScript to parse.
+i.e. the line `json.NewEncoder(w).Encode(results)` encodes the results as JSON and sends it back to the frontend.
+`json.NewEncoder().Encode()` in Golang is equivalent to `JSON.stringify()` in JavaScript.
 It's my personal preference for readability and also the standard for APIs.
 Just like how I wrote this devlog in Markdown.
 That's what happens when you let the Discord generation code a backend!
 
-### infoHandler(): The Info Desk
+
+> Andrew! what's `db.SearchPages(query)`?
+
+Remember that `db` is our database connection instance that we created back in `main()` in `cmd/server/main.go`.
+This is a concept called dependency injection.
+`main()` creates the database connection instance and passes it to handlers such as `searchHandler()` and `infoHandler()`.
+
+### infoHandler()
 
 On the other hand, `infoHandler()` is for the backend to read and display the current configuration.
 For instance, it will display the most recently crawled `SEED_URL` and MongoDB cluster at the top of the page at all times.
@@ -831,14 +870,14 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 This is where the magic happens! 
 We use MongoDB Atlas Search to find relevant pages and convert scores into star ratings.
 
-### SearchPages(): The Search Engine
+### SearchPages()
 
 We're back at `database/mongo.go`!
 This time, we'll use MongoDB Atlas Search to find relevant pages and convert scores into star ratings.
 
-> Andrew! Why is `SearchPages()` in `database/mongo.go`? Why couldn't we have just used a different file?
+> Andrew! Why is `SearchPages()` in `database/mongo.go`? We already used `mongo.go` for `InsertPage()` in the Write Path! Why couldn't we have just used a different file for this job?
 
-Let's take a look at the system design diagrams. 
+To answer this question, let's take a look at the system design diagrams. 
 Both the write path and read path follow the architecture of:
 
 ```
@@ -851,8 +890,8 @@ Both the write path and read path follow the architecture of:
 [Blue] Database (MongoDB Atlas)
 ```
 
-Okay yeah, we're not running a business here (or are we?). 
-The business logic layer is in charge of processes and workflows between the presentation layer and data access layer.
+Okay yeah, we're not running a business here (unless...?). 
+The business logic layer is actually just another name for the layer that's in charge of processes and workflows between the presentation layer and data access layer.
 It commands what our app does with the data.
 
 `SearchPages()` lives in the orange Data Access Layer since it encapsulates all MongoDB-specific logic.
@@ -877,7 +916,7 @@ func (db *DB) SearchPages(query string) ([]SearchResult, error) {
 				{Key: "fuzzy", Value: bson.D{}}, // For when your spelling is... creative.
 			}},
 		}}},
-		// Limit to top 10 candidates (as per requirement).
+		// Limit to top 10 candidates
 		{{Key: "$limit", Value: 10}},
 		// Project the score so we can judge them.
 		{{Key: "$project", Value: bson.D{
@@ -957,34 +996,41 @@ func (db *DB) SearchPages(query string) ([]SearchResult, error) {
 }
 ```
 
-**Breaking down the aggregation pipeline:**
+Here's a breakdown of the aggregation pipeline:
 
-1. **$search stage**: Uses Atlas Search with fuzzy matching
-2. **$limit stage**: Only return top 10 results
-3. **$project stage**: Include score metadata
+1. The search stage. We use MongoDB Atlas Search with fuzzy matching.
+2. The limit stage. We default to returning the top 10 results.
+3. The project (as in projection) stage, which includes the score (and helps us calculate the star ratings).
 
-[Explain what fuzzy matching is and why it's useful - typo tolerance]
+> Andrew! What's `fuzzy` matching?
+
+Fuzzy matching is a feature of MongoDB Atlas Search that saves your typos by still allowing for partial matches. 
+Real browsers take this to the next level by having a "Search instead for ..." feature at the top of your search results.
 
 ### The Star Rating Algorithm
 
-[Explain the absolute scoring system]
+I experiemtned with both a normalized and absolute scoring system and ended up going with the absolute.
 
-**Our star scale:**
 - 5 stars: Score >= 5.0 (highly relevant)
 - 4 stars: Score >= 4.0
 - 3 stars: Score >= 3.0
 - 2 stars: Score >= 2.0
 - 1 star: Score < 2.0
 
-```go
-// [CODE: Star calculation logic from SearchPages()]
-```
+> Andrew! Why absolute instead of normalized? You're sooo lazy!
 
-[Add Q&A: Why absolute instead of normalized? Because users care about actual relevance, not relative ranking]
+Well the whole point of CrawlStars is to experiment with SEO in MongoDB Atlas Search. 
+We care about actual relevance, not relative ranking.
+The normalized system wasn't super hard to code, but it wasn't useful.
+If we crawled the Computer Science Wikipedia page but typed `biology` into the search bar, would you expect any of the pages to earn a 5-star rating?
+It's important not to misrepresent our results' relevance, especially since we want the star ratings to be comparable with one another in case we want to optimize something later.
 
 ## web/index.html
 
-The frontend is where everything comes together! Users type queries, see results with star ratings, and can click through to pages.
+Welcome back to the green presentation layer!
+The frontend is where everything comes together.
+Users type queries, `index.html` handles the search with `performSearch()`, sends a GET request to `/search?q=...`, and then in `server/main.go`, `searchHandler()` receives the request and sends it to MongoDB Atlas Search.
+After receiving the star ratings from `database/mongo.go`, `index.html`'s `displayResults()` renders them to the page for the user to take in all its glory.
 
 ### The Search Interface
 

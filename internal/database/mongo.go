@@ -121,7 +121,7 @@ func (db *DB) SearchPages(query string) ([]SearchResult, error) {
 				{Key: "fuzzy", Value: bson.D{}}, // For when your spelling is... creative.
 			}},
 		}}},
-		// Limit to top 10 candidates (as per requirement).
+		// Limit to top 10 candidates
 		{{Key: "$limit", Value: 10}},
 		// Project the score so we can judge them.
 		{{Key: "$project", Value: bson.D{
