@@ -669,6 +669,371 @@ Let's forget about that and instead focus on this extremely aesthetic read path 
 
 ![CrawlStars Read Path](assets/CrawlStars-read-path.png)
 
-It's about as intuitive as it gets: the user interacts with the frontend `index.html` which tells the backend `main.go` and `mongo.go` to search for a query using MongoDB Atla's search functionality. 
-The backend then calculates the star rating based on relevance and returns the results to the frontend which displays them to the user.
+It's about as intuitive as it gets: the user interacts with the frontend `index.html` which tells the backend `main.go` and `mongo.go` to search for a query using MongoDB Atlas' search functionality (including fuzzy matching). 
+The backend then calculates the star rating based on relevance score and returns the results to the frontend which displays them to the user.
+It's pretty much my best attempt at turning our crawlbot database into a fully functional and charming little search engine.
+Yeah I know the algorithm needs work, but hey at least there aren't any ads or "real" singles in our area!
+Just kidding, I go to Waterloo. I'm the single in the area.
+
+## cmd/server/main.go
+
+The search server is where users send their queries and get back results. 
+Unlike the crawler which runs once and exits, this server runs continuously and waits for HTTP requests (aka the user typing in their query into our amazing search bar.)
+
+### The Server Setup
+
+```go
+func main() {
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Show what we're connecting to (helpful for debugging)
+	displayURI := mongoURI
+	if strings.Contains(mongoURI, "@") {
+		// Redact password for security
+		parts := strings.Split(mongoURI, "@")
+		if len(parts) == 2 {
+			credPart := strings.Split(parts[0], "://")
+			if len(credPart) == 2 {
+				displayURI = credPart[0] + "://***@" + parts[1]
+			}
+		}
+	}
+	log.Printf("🔌 Connecting to: %s", displayURI)
+
+	var err error
+	db, err = database.Connect(mongoURI)
+	if err != nil {
+		log.Fatalf("🔥 Failed to connect to DB: %v", err)
+	}
+	defer db.Disconnect()
+	log.Println("✅ Database connected. Server listening on port " + port)
+
+	// Serve the frontend HTML
+	http.HandleFunc("/", homeHandler)
+
+	// API endpoint for search
+	http.HandleFunc("/search", corsMiddleware(searchHandler))
+
+	// API endpoint to get current configuration
+	http.HandleFunc("/info", corsMiddleware(infoHandler))
+
+	log.Printf("🌐 Open your browser to: http://localhost:%s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+```
+
+Aha! Finally a `main()` function! 
+Was it worth the wait?
+Let's walk through it from top to bottom.
+First we get the MongoDB URI and port from environment variables so that we can run it at port 8080 as a default.
+Then we let the user know that we're connecting to the database.
+If we've connected successfully, we can call in our frontend HTML and set up our HTTP handlers `http.HandleFunc()` for the /search and /info endpoints.
+We can finally start the server and give the user a link straight to the server.
+
+> Andrew! Where did HandleFunc() come from?
+
+`http.HandleFunc()` is a Go function that registers a normal function as an http handler for a specific URL pattern.
+HTTP handlers are functions that take a `http.ResponseWriter` and a `*http.Request` as parameters.
+Then, the handler function can use the `http.ResponseWriter` to write a response back to the client and the `*http.Request` to access the request data.
+In this case, we're using it to register the `homeHandler`, `searchHandler`, and `infoHandler` functions (that we gotta write ourselves!) for the root URL pattern "/".
+
+> Andrew! Why do we need two endpoints?
+
+Both `searchHandler()` and `infoHandler()` are HTTP handlers in the read path, but they serve different purposes.
+- `searchHandler()`is for the frontend to handle the actual search queries. For example, if we type `computer science` into the search bar, it calls GET `/search?q=computer+science` and returns a JSON array of the search results.
+- `infoHandler()` provides metadata about the current crawler configuration. It calls GET `/info` and returns a JSON with the seed URL and MongoDB Atlas cluster info. This information is always present in CrawlStars at the top banner.
+- It's an important REST API design principle for each endpoint to have a single responsibility.
+- i.e. caching: the frontend can cache `/info` for this crawler's configuration, but `/search` changes every time we type in a query.
+
+Let's investigate `searchHandler()` (the write path) first.
+
+### searchHandler(): The Brain of the Operation
+
+> Andrew! What happens when I type in a query?
+
+The frontend sends a GET request to the `/search` endpoint with the query as a parameter.
+We'll let the `searchHandler()` function write the request in the terminal.
+(If there's an error, it will log the error in the terminal and return an error message.)
+Then, it will call the `db.SearchPages(query)` function from MongoDB Atlas Search to search for relevant pages.
+
+```go
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "Please provide a 'q' query parameter.", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("🔎 Searching for: %s", query)
+
+	results, err := db.SearchPages(query)
+	if err != nil {
+		log.Printf("💥 Search error: %v", err)
+		http.Error(w, "Something exploded internally.", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+```
+
+Once finished, the results are returned as JSON and sent back to the frontend.
+
+> Andrew! Why JSON?
+
+Because it's easy for humans to read and write, and for JavaScript to parse.
+It's my personal preference for readability and also the standard for APIs.
+Just like how I wrote this devlog in Markdown.
+That's what happens when you let the Discord generation code a backend!
+
+### infoHandler(): The Info Desk
+
+On the other hand, `infoHandler()` is for the backend to read and display the current configuration.
+For instance, it will display the most recently crawled `SEED_URL` and MongoDB cluster at the top of the page at all times.
+
+```go
+func infoHandler(w http.ResponseWriter, r *http.Request) {
+	seedURL := os.Getenv("SEED_URL")
+	if seedURL == "" {
+		seedURL = "Not configured"
+	}
+
+	mongoURI := os.Getenv("MONGO_URI")
+	cluster := "localhost"
+	if strings.Contains(mongoURI, "@") {
+		parts := strings.Split(mongoURI, "@")
+		if len(parts) == 2 {
+			cluster = strings.Split(parts[1], "/")[0]
+		}
+	}
+
+	info := map[string]string{
+		"seedUrl": seedURL,
+		"cluster": cluster,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
+}
+```
+
+## internal/database/mongo.go
+
+This is where the magic happens! 
+We use MongoDB Atlas Search to find relevant pages and convert scores into star ratings.
+
+### SearchPages(): The Search Engine
+
+We're back at `database/mongo.go`!
+This time, we'll use MongoDB Atlas Search to find relevant pages and convert scores into star ratings.
+
+> Andrew! Why is `SearchPages()` in `database/mongo.go`? Why couldn't we have just used a different file?
+
+Let's take a look at the system design diagrams. 
+Both the write path and read path follow the architecture of:
+
+```
+[Green] Presentation Layer (cmd/server/main.go)
+    ↓
+[Purple] Business Logic Layer (cmd/server/main.go)
+    ↓
+[Orange] Data Access Layer (internal/database/mongo.go)  ← SearchPages() lives here
+    ↓
+[Blue] Database (MongoDB Atlas)
+```
+
+Okay yeah, we're not running a business here (or are we?). 
+The business logic layer is in charge of processes and workflows between the presentation layer and data access layer.
+It commands what our app does with the data.
+
+`SearchPages()` lives in the orange Data Access Layer since it encapsulates all MongoDB-specific logic.
+This includes aggregation pipelines and Atlas Search.
+It also keeps the HTTP layer `main.go` clean and focused on handling requests and responses.
+
+
+```go
+// SearchPages looks for pages matching the query using Atlas Search.
+// It also awards Michelin stars based on relevance.
+func (db *DB) SearchPages(query string) ([]SearchResult, error) {
+	// The magic pipeline.
+	// Requires an Atlas Search index named "default" on the 'webpages' collection.
+	pipeline := mongo.Pipeline{
+		{{Key: "$search", Value: bson.D{
+			{Key: "index", Value: "default"},
+			{Key: "text", Value: bson.D{
+				{Key: "query", Value: query},
+				{Key: "path", Value: bson.D{
+					{Key: "wildcard", Value: "*"},
+				}},
+				{Key: "fuzzy", Value: bson.D{}}, // For when your spelling is... creative.
+			}},
+		}}},
+		// Limit to top 10 candidates (as per requirement).
+		{{Key: "$limit", Value: 10}},
+		// Project the score so we can judge them.
+		{{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 0},
+			{Key: "url", Value: 1},
+			{Key: "title", Value: 1},
+			{Key: "content", Value: 1},
+			{Key: "score", Value: bson.D{{Key: "$meta", Value: "searchScore"}}},
+		}}},
+	}
+
+	cursor, err := db.coll.Aggregate(context.Background(), pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("search pipeline exploded: %w", err)
+	}
+	defer cursor.Close(context.Background())
+
+	var results []Page
+	if err := cursor.All(context.Background(), &results); err != nil {
+		return nil, err
+	}
+
+	if len(results) == 0 {
+		return []SearchResult{}, nil
+	}
+
+	// Convert results to SearchResult with ABSOLUTE star ratings
+	// Instead of normalizing to the top result, we rate each result independently
+	// based on its raw MongoDB relevance score.
+	//
+	// STAR RATING SCALE (based on MongoDB Atlas Search scores):
+	// ============================================================
+	// 5 stars: Score >= 5  (Excellent match - exact keyword matches, boosted fields)
+	// 4 stars: Score >= 4   (Very good match - multiple keyword occurrences)
+	// 3 stars: Score >= 3   (Good match - keyword present but not dominant)
+	// 2 stars: Score >= 2   (Fair match - weak relevance, partial matches)
+	// 1 star:  Score < 2    (Poor match - barely relevant, edge case matches)
+	//
+	// Note: MongoDB Atlas Search scores are unbounded and can go higher than 10.
+	// The scale focuses on practical ranges observed in typical searches.
+	// You can adjust these thresholds based on your dataset and search behavior.
+
+	var starred []SearchResult
+
+	for _, p := range results {
+		// Calculate stars based on absolute score thresholds
+		// Simple linear scale: 5, 4, 3, 2, or 1 stars
+		var stars int
+
+		if p.Score >= 5.0 {
+			stars = 5
+		} else if p.Score >= 4.0 {
+			stars = 4
+		} else if p.Score >= 3.0 {
+			stars = 3
+		} else if p.Score >= 2.0 {
+			stars = 2
+		} else {
+			stars = 1
+		}
+
+		// Create a snippet (first 100 chars of content)
+		snippet := p.Content
+		if len(snippet) > 100 {
+			snippet = snippet[:100] + "..."
+		}
+
+		starred = append(starred, SearchResult{
+			Title:   p.Title,
+			URL:     p.URL,
+			Stars:   stars,
+			Snippet: snippet,
+		})
+	}
+
+	return starred, nil
+}
+```
+
+**Breaking down the aggregation pipeline:**
+
+1. **$search stage**: Uses Atlas Search with fuzzy matching
+2. **$limit stage**: Only return top 10 results
+3. **$project stage**: Include score metadata
+
+[Explain what fuzzy matching is and why it's useful - typo tolerance]
+
+### The Star Rating Algorithm
+
+[Explain the absolute scoring system]
+
+**Our star scale:**
+- 5 stars: Score >= 5.0 (highly relevant)
+- 4 stars: Score >= 4.0
+- 3 stars: Score >= 3.0
+- 2 stars: Score >= 2.0
+- 1 star: Score < 2.0
+
+```go
+// [CODE: Star calculation logic from SearchPages()]
+```
+
+[Add Q&A: Why absolute instead of normalized? Because users care about actual relevance, not relative ranking]
+
+## web/index.html
+
+The frontend is where everything comes together! Users type queries, see results with star ratings, and can click through to pages.
+
+### The Search Interface
+
+[Describe the UI - search box, results display, clean Solarized Light theme]
+
+[Show HTML structure - the search form and results container]
+
+### performSearch(): Making the Magic Happen
+
+```javascript
+// [CODE: performSearch() function]
+```
+
+**What happens when you search:**
+
+1. User types query and hits Enter (or clicks Search)
+2. `performSearch()` sends GET request to /search?q=...
+3. Server responds with JSON array of results
+4. `displayResults()` renders them to the page
+
+### displayResults(): Show and Tell
+
+```javascript
+// [CODE: displayResults() function]
+```
+
+**Key features:**
+- Clickable URLs that open in new tabs
+- Star ratings displayed as ⭐ characters
+- Snippets showing first 500 chars of content
+- Clean, responsive design
+
+[Add Q&A: Why filter out short content? To avoid navigation noise like "Home About Contact"]
+
+## Completing the Read Path
+
+And just like that, we've gone full circle!
+
+**The complete journey:**
+1. User types "computer science" in search box
+2. Frontend sends GET /search?q=computer+science
+3. Backend receives request via `searchHandler()`
+4. Database executes Atlas Search aggregation pipeline
+5. MongoDB returns results with relevance scores
+6. Backend calculates 1-5 star ratings
+7. Frontend displays clickable results with stars
+
+This is the read path in action - turning raw database queries into a user-friendly search experience.
+
+Now you know exactly how CrawlStars works, from crawling to searching. Not bad for a winter break project, huh?
+
 
