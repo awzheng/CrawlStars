@@ -4,7 +4,7 @@
 
 This is an authentic and energetic devlog about why and how I built CrawlStars. 
 I will justify all of my design choices by sharing my thought processes for every decision I made as I was building CrawlStars. 
-I have also integrated the <font color = "grey">~~voices in my head~~</font> most frequently asked questions into this devlog to answer the most common concerns about the project! 
+I have also included the most frequently asked questions (and the questions that I asked myself!) into this devlog to answer the most common concerns about the project! 
 I would appreciate any feedback you may have!
 
 Instagram, Discord @awzheng
@@ -66,6 +66,19 @@ Thus, `Work Queue` and `Results Channel` are purple to represent the transient m
 
 
 ### Project Structure
+
+Both the read and write paths follow the same pattern: 
+```
+[Green] Presentation Layer
+    ↓
+[Purple] Business Logic Layer
+    ↓
+[Orange] Data Access Layer
+    ↓
+[Blue] Database (MongoDB Atlas)
+```
+
+And here's the project's core file structure:
 
 ```
 CrawlStars/
@@ -779,11 +792,11 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 > Andrew! What's middleware!?
 
-Middleware lets our API to be called from `index.html` served from the same origin.
-What does "the same origin" mean, you ask?
-Well, let's say we have a website at `https://crawlstars.com`.
+Let's say we have a website at `https://crawlstars.com`.
 If we wanted to call the `/search` endpoint from `index.html`, we'd need to use the `fetch` API to call the `/search` endpoint. 
-Without the middleware, we would be stopped by the CORS (Cross-Origin Resrouce Sharing) security policy.
+If we ever decide to grow this project and host the frontend seperately from the backend, we would be stopped by the CORS (Cross-Origin Resrouce Sharing) security policy.
+(i.e. when I tried to figure out if I could host this on Vercel but ran into CORS, aka Cross-Origin Resource Sharing, issues)
+This is a best practice for API design in general.
 
 ### searchHandler()
 
@@ -1009,7 +1022,7 @@ Real browsers take this to the next level by having a "Search instead for ..." f
 
 ### The Star Rating Algorithm
 
-I experiemtned with both a normalized and absolute scoring system and ended up going with the absolute.
+I experimented with both a normalized and absolute scoring system and ended up going with the absolute.
 
 - 5 stars: Score >= 5.0 (highly relevant)
 - 4 stars: Score >= 4.0
@@ -1032,54 +1045,155 @@ The frontend is where everything comes together.
 Users type queries, `index.html` handles the search with `performSearch()`, sends a GET request to `/search?q=...`, and then in `server/main.go`, `searchHandler()` receives the request and sends it to MongoDB Atlas Search.
 After receiving the star ratings from `database/mongo.go`, `index.html`'s `displayResults()` renders them to the page for the user to take in all its glory.
 
+Let's be real here, I won't be going into detail about the HTML and CSS since it's just a basic presentation layer. 
+Webdev is dead anyway smh...
+The code snippets in the devlog will be mostly focused on explaining the JavaScript logic and how it interacts with the Go backend.
+
 ### The Search Interface
 
-[Describe the UI - search box, results display, clean Solarized Light theme]
+The main thought process behind the search interface is to make it as user-friendly as possible.
+The `infoBanner` at the top is from the `infoHandler()` function, which calls GET `/info` and returns a JSON with the seed URL and MongoDB Atlas cluster info.
+It made testing different configurations easier, especially since Go is a compiled language.
+This meant that I had to restart the server every time I changed something, and having the info at the top made it easy to see if I had refreshed properly in case I decided to crawl a different seed URL (which was pretty much every time).
 
-[Show HTML structure - the search form and results container]
+Other than that, the search interface is complete and clean: a simple header, search bar, and results below.
+Remember that `main.go` prints our search queries to the console, so we can see the business logic function properly at all times.
 
-### performSearch(): Making the Magic Happen
-
-```javascript
-// [CODE: performSearch() function]
-```
-
-**What happens when you search:**
-
-1. User types query and hits Enter (or clicks Search)
-2. `performSearch()` sends GET request to /search?q=...
-3. Server responds with JSON array of results
-4. `displayResults()` renders them to the page
-
-### displayResults(): Show and Tell
+### performSearch()
 
 ```javascript
-// [CODE: displayResults() function]
+// ============================================
+// PERFORM SEARCH
+// Main search function that queries the backend API
+// ============================================
+async function performSearch() {
+    const query = searchInput.value.trim();
+
+    // Validate input (don't search for empty strings)
+    if (!query) {
+        resultsContainer.innerHTML = '<div class="error">Please enter a search query!</div>';
+        return;
+    }
+
+    // Show loading state while we wait for the server
+    resultsContainer.innerHTML = '<div class="loading">🔍 Searching the cosmos...</div>';
+
+    try {
+        // Call the search API endpoint
+        const response = await fetch(`http://localhost:8080/search?q=${encodeURIComponent(query)}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const results = await response.json();
+        displayResults(results, query);
+    } catch (error) {
+        // Show error message if something goes wrong
+        resultsContainer.innerHTML = `
+            <div class="error">
+                <strong>Oops! Something went wrong.</strong><br>
+                ${error.message}<br><br>
+                Make sure the server is running on port 8080.
+            </div>
+        `;
+    }
+}
 ```
 
-**Key features:**
-- Clickable URLs that open in new tabs
-- Star ratings displayed as ⭐ characters
-- Snippets showing first 500 chars of content
-- Clean, responsive design
+The logic behind `performSearch()` is simple.
+- it gets the user's `query`
+- it calls `fetch()` to send a GET request to `/search?q=${encodeURIComponent(query)}`
+- if the response is successful, it calls `displayResults()`
+- if the response is not successful, it shows an error message
+- if successful, it calls `displayResults()` below!
 
-[Add Q&A: Why filter out short content? To avoid navigation noise like "Home About Contact"]
+> Andrew! Wait a minute! What's `/search?q=${encodeURIComponent(query)}`? What does `encodeURIComponent(query)` do?
+
+`encodeURIComponent(query)` is a function that encodes the query string to be URL-safe.
+Ever notice how when you google a query with non-letter or number characters, for example `computer science`, it changes to `computer+science` or `computer%20science`?
+This is because `+` and `%20` are URL-safe character equivalents for spaces.
+Similarly speakingk, each "special" character has a URL-safe equivalent.
+
+### displayResults()
+
+```javascript
+// ============================================
+// DISPLAY SEARCH RESULTS
+// Renders the results as nice-looking HTML cards
+// ============================================
+function displayResults(results, query) {
+    // Handle no results case
+    if (!results || results.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="no-results">
+                No results found for "${escapeHtml(query)}"<br><br>
+                Try a different search term!
+            </div>
+        `;
+        return;
+    }
+
+    // Generate HTML for each result card
+    const html = results.map((result, index) => {
+        const stars = generateStars(result.stars);
+        return `
+            <div class="result-card" style="animation-delay: ${index * 0.08}s">
+                <div class="result-title">${escapeHtml(result.title)}</div>
+                <a href="${escapeHtml(result.url)}" target="_blank" class="result-url">${escapeHtml(result.url)}</a>
+                <div class="result-snippet">${escapeHtml(result.snippet)}</div>
+                <div class="stars">${stars}</div>
+            </div>
+        `;
+    }).join('');
+
+    resultsContainer.innerHTML = `<div class="results">${html}</div>`;
+}
+```
+
+`displayResults()` takes in the results from `performSearch()` (which is the output from MongoDB Atlas Search).
+Each result URL card output by `displayResults()` contains a clickable URL, a snippet of the content, and a star rating based on MongoDB Atlas Search relevance score.
+Animation delay is a for-fun thing. I added it to each result card to create a smooth fade-in effect.
+
+Remember that we filtered out short content in `internal/crawler/crawler.go` to avoid navigation noise like "Home About Contact".
+There's even more potential filtering for improvement in the future!
+
+> Andrew! Wait a minute! What's `escapeHtml()`? It's everywhere! Also, what happens if the user maliciously searches for `<script>alert('xss')</script>`?
+
+Well well well, I'm glad that you asked these conveniently related questions!
+`escapeHtml()` is a function to prevent XSS (Cross-Site Scripting) attacks.
+For example, if a malicious user were to search for `<script>alert('xss')</script>`, it would be escaped to `&lt;script&gt;alert('xss')&lt;/script&gt;`, which would be displayed as text instead of being executed as code.
+Always remember to use `escapeHtml()` when displaying user input in the frontend!
 
 ## Completing the Read Path
 
-And just like that, we've gone full circle!
+And just like that, we've gone full circle in the read path system design diagram!
 
-**The complete journey:**
-1. User types "computer science" in search box
-2. Frontend sends GET /search?q=computer+science
-3. Backend receives request via `searchHandler()`
-4. Database executes Atlas Search aggregation pipeline
-5. MongoDB returns results with relevance scores
-6. Backend calculates 1-5 star ratings
-7. Frontend displays clickable results with stars
+**Read Path Reiterated**
+1. User types `query` in search box
+2. Frontend `index.html` calls `performSearch()`
+3. Frontend `index.html` sends GET `/search?q=${encodeURIComponent(query)}`
+4. Backend `server/main.go` receives request via `searchHandler()`
+5. Backend `server/main.go` calls `database/mongo.go`'s `SearchPages()`
+6. Database executes MongoDB Atlas Search aggregation pipeline
+7. MongoDB returns results with relevance scores
+8. Backend `server/mongo.go` turns these relevance scores into intuitive 1-5 star ratings
+9. Backend `server/main.go` returns results as JSON
+10. Frontend `index.html` calls `displayResults()`
+11. `displayResults()` displays clickable results with stars back to the user
 
 This is the read path in action - turning raw database queries into a user-friendly search experience.
 
-Now you know exactly how CrawlStars works, from crawling to searching. Not bad for a winter break project, huh?
+Now we know exactly how CrawlStars works, from crawling to searching, and all of the design choices behind it!
+
+# Conclusion
+
+Thanks for sticking around until the very end!
+This was my first Golang and MongoDB project, it was super fun to build.
+What started out as "oh man I really need to learn how databases work" ended up being an unforgettable journey of concurrent programming and systems thinking.
+Let me know if you have any questions or suggestions for improvement!
+My DMs on my socials are always open!
+
+P.S. Never abbreviate Concurrent Programming.
 
 
