@@ -1,6 +1,6 @@
 # CrawlStars
 
-A concurrent web crawler and search engine built with Go and MongoDB Atlas during my 1A/1B winter break. This project explores SEO fundamentals, concurrent programming patterns, and full-text search implementation.
+A concurrent web crawler and search engine built with Go and MongoDB Atlas during my 1A/1B winter break. This project explores database fundamentals, concurrent programming patterns, and full-text search implementation.
 
 ## ‼️ Read the DevLog ‼️
 
