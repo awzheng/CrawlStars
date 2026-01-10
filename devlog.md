@@ -1188,6 +1188,8 @@ Now we know exactly how CrawlStars works, from crawling to searching, and all of
 
 # Conclusion
 
+![crawlstars in action](assets/crawlstars-search.png)
+
 Thanks for sticking around until the very end!
 This was my first Golang and MongoDB project, it was super fun to build.
 What started out as "oh man I really need to learn how databases work" ended up being an unforgettable journey of concurrent programming and systems thinking.
