@@ -4,7 +4,7 @@ A concurrent web crawler and search engine built with Go and MongoDB Atlas durin
 
 ## ‼️ Read the DevLog ‼️
 
-I documented the entire development process, technical decisions, and reasoning behind every design choice in the devlog. It covers the Write Path (crawler architecture), Read Path (search system), and all the lessons learned along the way. No AI slop, fully authentic. I promise.
+I documented the entire development process, technical decisions, and reasoning behind every design choice in the devlog. It covers the Write Path (crawler architecture), Read Path (search system), and all the lessons learned along the way. Fully authentic, no AI slop. I promise.
 
 Check it out here: [devlog.md](devlog.md)
 
